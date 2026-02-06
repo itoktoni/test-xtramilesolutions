@@ -1,21 +1,26 @@
-FROM php:8.1-apache
+FROM php:8.1-cli
 
-# Install PHP extensions
-RUN docker-php-ext-install pdo pdo_mysql
+WORKDIR /app
 
-# Enable Apache mod_rewrite
-RUN a2enmod rewrite
+RUN apt-get update && apt-get install -y \
+    libzip-dev \
+    unzip \
+    wget \
+    && docker-php-ext-install pdo pdo_mysql
 
-# Set working directory
-WORKDIR /var/www/html
+# Install Composer
+RUN wget https://getcomposer.org/download/latest-stable/composer.phar -O composer \
+    && chmod +x composer \
+    && mv composer /usr/local/bin/composer
 
-# Copy application files
-COPY . /var/www/html/
+COPY composer.json ./
+RUN composer install --optimize-autoloader --no-scripts
 
-# Set permissions
-RUN chown -R www-data:www-data /var/www/html
+COPY . .
 
-# Expose port
-EXPOSE 80
+EXPOSE 8080
 
-CMD ["apache2-foreground"]
+# Run tests
+RUN chmod +x vendor/bin/phpunit
+
+CMD ["php", "-S", "0.0.0.0:8080", "-t", "public"]
