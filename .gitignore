@@ -36,6 +36,7 @@ MANIFEST
 *.so
 *.dylib
 *.test
+.env
 .out
 vendor/
 go.work
