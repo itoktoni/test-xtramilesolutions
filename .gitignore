@@ -46,7 +46,6 @@ docker-compose.override.yml
 .dockerignore
 
 # Environment
-.env
 .env.local
 .env.*.local
 *.local

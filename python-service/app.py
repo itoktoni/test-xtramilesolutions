@@ -5,22 +5,11 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-# Data storage files
-DATA_FILE = 'received_users.json'
-DAVID_FILE = 'david_users.json'
+# Data storage directory
 USERS_DIR = 'users'
 
-# Ensure directories exist
+# Ensure directory exists
 os.makedirs(USERS_DIR, exist_ok=True)
-
-# Ensure data files exist
-if not os.path.exists(DATA_FILE):
-    with open(DATA_FILE, 'w') as f:
-        json.dump([], f)
-
-if not os.path.exists(DAVID_FILE):
-    with open(DAVID_FILE, 'w') as f:
-        json.dump([], f)
 
 @app.route('/receive_user', methods=['POST'])
 def receive_user():
@@ -34,35 +23,16 @@ def receive_user():
         print(f"[Python Flask] Received user: {user_data['name']} ({user_data['email']})")
         print(f"[Python Flask] Timestamp: {datetime.now().isoformat()}")
 
-        # Load existing data
-        with open(DATA_FILE, 'r') as f:
-            users = json.load(f)
-
-        # Append new user
-        users.append(user_data)
-
-        # Save updated data
-        with open(DATA_FILE, 'w') as f:
-            json.dump(users, f, indent=2)
+        # Save individual user file (1 file 1 record, like Go)
+        user_id = user_data.get('id', 0)
+        user_filename = os.path.join(USERS_DIR, f"user_{user_id}.json")
+        with open(user_filename, 'w') as f:
+            json.dump(user_data, f, indent=2)
+        print(f"[Python Flask] Saved user to {user_filename}")
 
         # Check if user name contains "David" (case-insensitive)
         if 'david' in user_data.get('name', '').lower():
-            print(f"[Python Flask] David detected! Saving to users/ folder (1 file per user)")
-
-            # Save individual David user file (1 file 1 record, like Go)
-            david_id = user_data.get('id', 0)
-            david_filename = os.path.join(USERS_DIR, f"user_{david_id}.json")
-            with open(david_filename, 'w') as f:
-                json.dump(user_data, f, indent=2)
-            print(f"[Python Flask] David user saved to {david_filename}")
-
-            # Also update david_users.json for reference
-            with open(DAVID_FILE, 'r') as f:
-                david_users = json.load(f)
-            david_users.append(user_data)
-            with open(DAVID_FILE, 'w') as f:
-                json.dump(david_users, f, indent=2)
-            print(f"[Python Flask] Total David users: {len(david_users)}")
+            print(f"[Python Flask] David detected!")
 
         return jsonify({
             'message': 'User received and stored successfully',
@@ -76,9 +46,12 @@ def receive_user():
 @app.route('/users', methods=['GET'])
 def get_users():
     try:
-        with open(DATA_FILE, 'r') as f:
-            users = json.load(f)
-
+        users = []
+        for filename in os.listdir(USERS_DIR):
+            if filename.startswith('user_') and filename.endswith('.json'):
+                filepath = os.path.join(USERS_DIR, filename)
+                with open(filepath, 'r') as f:
+                    users.append(json.load(f))
         return jsonify(users), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500

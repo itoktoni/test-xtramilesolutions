@@ -220,14 +220,14 @@ func fetchSingleUser(url string) (*User, error) {
 }
 
 func loadConfig() Config {
-	maxID := getEnvInt("MAX_USER_ID", defaultMaxUserID)
+	// Akan mengambil nilai dari file .env secara otomatis
 	return Config{
 		PHPAPIURL:    getEnv("PHP_API_URL", "http://php-api:8080"),
 		PythonAPIURL: getEnv("PYTHON_API_URL", "http://python-service:5000"),
 		StateFile:    "data/state.json",
 		UsersDir:     "users",
-		SleepSeconds: getEnvInt("SLEEP_SECONDS", defaultSleepSeconds),
-		MaxUserID:    maxID,
+		SleepSeconds: getEnvInt("SLEEP_SECONDS", 10),
+		MaxUserID:    getEnvInt("MAX_USER_ID", 1000000),
 	}
 }
 

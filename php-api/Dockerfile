@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y \
     unzip \
     wget \
     git \
+    netcat-openbsd \
     && docker-php-ext-install pdo pdo_mysql
 
 # Install Composer
@@ -28,14 +29,18 @@ COPY . .
 RUN mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
 RUN chmod -R 777 storage bootstrap/cache
 
-# Expose port
-EXPOSE 8080
-
 # Set permissions for artisan
 RUN chmod +x artisan
 
 # Generate autoloader
 RUN composer dump-autoload --optimize || true
 
-# Run Laravel server
-CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8080"]
+# Copy entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# Expose port
+EXPOSE 8080
+
+# Run entrypoint script
+ENTRYPOINT ["docker-entrypoint.sh"]

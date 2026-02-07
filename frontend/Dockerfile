@@ -2,6 +2,14 @@ FROM node:18-alpine
 
 WORKDIR /app
 
+# Build arguments for React environment variables
+ARG REACT_APP_API_URL
+ARG REACT_APP_PHP_API_URL
+
+# Set environment variables for build time
+ENV REACT_APP_API_URL=${REACT_APP_API_URL}
+ENV REACT_APP_PHP_API_URL=${REACT_APP_PHP_API_URL}
+
 # Copy package files
 COPY package*.json ./
 
