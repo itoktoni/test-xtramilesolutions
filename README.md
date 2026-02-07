@@ -43,7 +43,7 @@ The application consists of the following services:
 
 4. Access the services:
    - Frontend: http://localhost:4135
-   - PHP API: http://localhost:8080/api/users
+   - PHP API: http://localhost:8080/users
    - Python Service: http://localhost:5000
 
 ## Running the Application
@@ -74,11 +74,11 @@ A Laravel-based REST API with the following structure:
 - **Routes**: `routes/api.php`, `routes/web.php`
 
 **API Endpoints:**
-- `GET /api/users` - List all users
-- `POST /api/users` - Create a new user
-- `GET /api/users/{id}` - Get specific user
-- `PUT /api/users/{id}` - Update user
-- `DELETE /api/users/{id}` - Delete user
+- `GET /users` - List all users
+- `POST /users` - Create a new user
+- `GET /users/{id}` - Get specific user
+- `PUT /users/{id}` - Update user
+- `DELETE /users/{id}` - Delete user
 
 ### Go Scheduler (`/go-scheduler-service`)
 - **Main**: `main.go` - Main Go application
@@ -241,11 +241,11 @@ npm start
 ### PHP API (Laravel)
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/users` | Get all users |
-| POST | `/api/users` | Create new user |
-| GET | `/api/users/{id}` | Get user by ID |
-| PUT | `/api/users/{id}` | Update user |
-| DELETE | `/api/users/{id}` | Delete user |
+| GET | `/users` | Get all users |
+| POST | `/users` | Create new user |
+| GET | `/users/{id}` | Get user by ID |
+| PUT | `/users/{id}` | Update user |
+| DELETE | `/users/{id}` | Delete user |
 
 ### Python Service
 | Method | Endpoint | Description |
