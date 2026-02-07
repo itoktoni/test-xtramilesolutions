@@ -2,7 +2,7 @@
 
 This project demonstrates a full-stack application with multiple microservices orchestrated using Docker Compose. The application includes:
 
-- A PHP API for user management
+- A Laravel PHP API for user management
 - A Go scheduler service
 - A Python service
 - A React frontend
@@ -12,7 +12,7 @@ This project demonstrates a full-stack application with multiple microservices o
 The application consists of the following services:
 
 1. **MySQL Database**: Stores user data
-2. **PHP API**: Provides REST endpoints for user management
+2. **PHP API (Laravel)**: Provides REST endpoints for user management
 3. **Go Scheduler**: Fetches data from PHP API and forwards specific records to Python service
 4. **Python Service**: Receives and stores data from Go scheduler
 5. **React Frontend**: Web interface for user interaction
@@ -21,10 +21,9 @@ The application consists of the following services:
 
 - Docker
 - Docker Compose
+- Git
 
-## Getting Started
-
-### Running the Application
+## Installation
 
 1. Clone the repository:
    ```bash
@@ -32,112 +31,232 @@ The application consists of the following services:
    cd <repo-directory>
    ```
 
-2. Build and start all services:
+2. Copy environment files:
    ```bash
-   docker-compose up --build
+   cp .env.example .env
    ```
 
-3. Access the services:
+3. Build and start all services:
+   ```bash
+   docker-compose up --build -d
+   ```
+
+4. Access the services:
    - Frontend: http://localhost:4135
-   - PHP API: http://localhost:8080/users
+   - PHP API: http://localhost:8080/api/users
    - Python Service: http://localhost:5000
 
-### Stopping the Application
+## Running the Application
 
+### Start Services
+```bash
+docker-compose up -d
+```
+
+### Stop Services
 ```bash
 docker-compose down
+```
+
+### View Logs
+```bash
+docker-compose logs -f <service-name>
 ```
 
 ## Services Details
 
 ### PHP API (`/php-api`)
-- Handles user creation via POST `/users` endpoint
-- Stores user data in MySQL database
-- Validates input data (name, email)
-- Returns created user data with assigned ID
+A Laravel-based REST API with the following structure:
+- **Controllers**: `app/Http/Controllers/UserController.php`
+- **Services**: `app/Services/UserService.php`
+- **Repositories**: `app/Repositories/EloquentUserRepository.php`, `UserRepositoryInterface.php`
+- **Models**: `app/Models/User.php`
+- **Routes**: `routes/api.php`, `routes/web.php`
+
+**API Endpoints:**
+- `GET /api/users` - List all users
+- `POST /api/users` - Create a new user
+- `GET /api/users/{id}` - Get specific user
+- `PUT /api/users/{id}` - Update user
+- `DELETE /api/users/{id}` - Delete user
 
 ### Go Scheduler (`/go-scheduler-service`)
+- **Main**: `main.go` - Main Go application
+- **State**: `state.json` - Tracks processed user IDs
+- **Data Storage**: `data/` and `users/` directories
 - Periodically fetches data from PHP API
-- Stores received data in a local file
 - Checks if user name starts with "David" and forwards to Python service
-- Configurable via environment variables
 
 ### Python Service (`/python-service`)
+- **Main**: `app.py` - Flask application
 - Receives user data from Go scheduler
-- Stores received data in a local JSON file
+- Stores received data in `users/` directory
 - Provides endpoints for data retrieval
 
 ### React Frontend (`/frontend`)
-- Simple form for user creation
-- Submits data to PHP API
-- Displays created user information
-- Styled with CSS
+- **Components**: `UserForm.js`, `UserTable.js` in `src/components/`
+- **Main**: `App.js`, `index.js` in `src/`
+- **Public**: `index.html` template
+- Simple form for user creation and table display
 
 ## Environment Variables
 
-The application uses environment variables for configuration:
+### Root `.env`
+- Database connection settings
+- Service URLs configuration
 
-- `PHP_API_URL`: Base URL for PHP API (default: http://php-api)
-- `PYTHON_API_URL`: Base URL for Python service (default: http://python-service:5000)
-- Database connection settings for PHP API
+### PHP API `.env`
+- Database: `DB_CONNECTION=mysql`, `DB_HOST=mysql`, `DB_PORT=3306`
+- `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`
+
+### Go Scheduler
+- `PHP_API_URL`: Base URL for PHP API
+- `PYTHON_API_URL`: Base URL for Python service
 
 ## Project Structure
 
 ```
 .
-├── php-api/                  # PHP API service
-│   ├── index.php             # Main API file
-│   └── Dockerfile            # Docker configuration
-├── go-scheduler-service/     # Go scheduler service
-│   ├── main.go               # Main Go application
-│   ├── go.mod                # Go module definition
-│   └── Dockerfile            # Docker configuration
-├── python-service/           # Python service
-│   ├── app.py                # Flask application
-│   ├── requirements.txt      # Python dependencies
-│   └── Dockerfile            # Docker configuration
-├── frontend/                 # React frontend
-│   ├── src/
-│   │   ├── App.js            # Main React component
-│   │   └── App.css           # Styles
+├── .env.example                    # Root environment template
+├── .gitignore                       # Git ignore rules
+├── docker-compose.yml               # Docker Compose configuration
+├── package-lock.json               # npm lock file
+├── README.md                        # This file
+│
+├── php-api/                         # Laravel PHP API service
+│   ├── app/                         # Application code
+│   │   ├── Http/
+│   │   │   ├── Controllers/
+│   │   │   │   └── UserController.php
+│   │   │   └── Kernel.php
+│   │   ├── Models/
+│   │   │   └── User.php
+│   │   ├── Providers/
+│   │   │   ├── AppServiceProvider.php
+│   │   │   └── UserServiceProvider.php
+│   │   ├── Repositories/
+│   │   │   ├── EloquentUserRepository.php
+│   │   │   └── UserRepositoryInterface.php
+│   │   └── Services/
+│   │       └── UserService.php
+│   ├── bootstrap/
+│   │   ├── app.php
+│   │   └── providers.php
+│   ├── config/
+│   │   ├── app.php
+│   │   ├── database.php
+│   │   └── ...
+│   ├── database/
+│   │   ├── factories/
+│   │   ├── migrations/
+│   │   └── seeders/
 │   ├── public/
-│   │   └── index.html        # HTML template
-│   ├── package.json          # Node dependencies
-│   └── Dockerfile            # Docker configuration
-├── mysql-data/               # MySQL data volume
-├── docker-compose.yml        # Docker Compose configuration
-└── README.md                 # This file
+│   │   └── index.php
+│   ├── routes/
+│   │   ├── api.php
+│   │   ├── web.php
+│   │   └── console.php
+│   ├── resources/
+│   │   ├── views/
+│   │   ├── js/
+│   │   └── css/
+│   ├── storage/
+│   │   ├── app/
+│   │   ├── framework/
+│   │   └── logs/
+│   ├── tests/
+│   │   ├── Feature/
+│   │   └── Unit/
+│   ├── .env.example
+│   ├── composer.json
+│   ├── artisan
+│   ├── Dockerfile
+│   └── ...
+│
+├── go-scheduler-service/            # Go scheduler service
+│   ├── main.go                      # Main Go application
+│   ├── go.mod                       # Go module definition
+│   ├── go.sum                       # Go dependencies
+│   ├── Dockerfile                   # Docker configuration
+│   ├── state.json.example           # State file template
+│   ├── data/                        # Data storage directory
+│   └── users/                       # Users storage directory
+│
+├── python-service/                  # Python Flask service
+│   ├── app.py                       # Flask application
+│   ├── requirements.txt            # Python dependencies
+│   ├── Dockerfile                   # Docker configuration
+│   └── users/                       # Users storage directory
+│
+└── frontend/                        # React frontend
+    ├── src/
+    │   ├── index.js                # React entry point
+    │   ├── App.js                  # Main App component
+    │   ├── App.css                 # App styles
+    │   └── components/
+    │       ├── UserForm.js         # User creation form
+    │       └── UserTable.js        # User table display
+    ├── public/
+    │   └── index.html              # HTML template
+    ├── package.json                # Node dependencies
+    ├── Dockerfile                  # Docker configuration
+    └── ...
 ```
 
 ## Development
 
 To run individual services for development:
 
-1. Navigate to the respective service directory
-2. Follow the service-specific development instructions
+### PHP API (Laravel)
+```bash
+cd php-api
+composer install
+cp .env.example .env
+php artisan migrate
+php artisan serve
+```
 
-## API Endpoints
-
-### PHP API
-- `POST /users` - Create a new user
-  - Request body: `{"name": "John Doe", "email": "john@example.com"}`
-  - Response: `{"id": 1, "name": "John Doe", "email": "john@example.com"}`
+### Go Scheduler
+```bash
+cd go-scheduler-service
+go run main.go
+```
 
 ### Python Service
-- `POST /receive_user` - Receive user from Go scheduler
-- `GET /users` - Get all received users
-- `GET /` - Health check
+```bash
+cd python-service
+pip install -r requirements.txt
+python app.py
+```
+
+### React Frontend
+```bash
+cd frontend
+npm install
+npm start
+```
+
+## API Endpoints Reference
+
+### PHP API (Laravel)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/users` | Get all users |
+| POST | `/api/users` | Create new user |
+| GET | `/api/users/{id}` | Get user by ID |
+| PUT | `/api/users/{id}` | Update user |
+| DELETE | `/api/users/{id}` | Delete user |
+
+### Python Service
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/receive_user` | Receive user from Go scheduler |
+| GET | `/users` | Get all received users |
+| GET | `/` | Health check |
 
 ## Troubleshooting
 
-- If containers fail to start, check logs with `docker-compose logs <service-name>`
-- Make sure ports 4135, 5000, and 8080 are available
-- Ensure Docker has enough resources allocated
-
-## Bonus Features Implemented
-
-- Error handling and input validation in PHP API
-- Styled UI using CSS in React frontend
-- Environment variables for API URLs in all services
-- Proper dependency management for each service
-- Comprehensive Docker Compose orchestration
+- **Containers fail to start**: Check logs with `docker-compose logs <service-name>`
+- **Port conflicts**: Ensure ports 4135, 5000, 8080, and 3306 are available
+- **Database connection issues**: Verify `.env` database settings
+- **Permission errors**: Run `chmod -R 775 storage bootstrap/cache` in php-api directory
