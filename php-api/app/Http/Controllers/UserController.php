@@ -20,9 +20,32 @@ class UserController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $users = $this->service->getAllUsers();
+        $sinceId = $request->query('since_id');
+        $scanId = $request->query('scan_id');
+        $limit = (int) $request->query('limit', 100);
+
+        $users = null;
+
+        if ($sinceId !== null) {
+            // Path 1: Get new users since ID
+            $users = $this->service->getUsersSinceId((int) $sinceId, $limit);
+        } elseif ($scanId !== null) {
+            // Path 2: Scan for updates
+            $lastCreatedId = (int) $request->query('last_created_id', 0);
+            if ($lastCreatedId > 0) {
+                $users = $this->service->getUsersForScan((int) $scanId, $lastCreatedId, $limit);
+            } else {
+                return response()->json([
+                    'error' => 'last_created_id is required when using scan_id'
+                ], 400);
+            }
+        } else {
+            // Default: Get all users
+            $users = $this->service->getAllUsers();
+        }
+
         return response()->json($users);
     }
 
@@ -42,7 +65,8 @@ class UserController extends Controller
         return response()->json([
             'id' => $user->id,
             'name' => $user->name,
-            'email' => $user->email
+            'email' => $user->email,
+            'created_at' => $user->created_at
         ], 201);
     }
 
@@ -61,7 +85,8 @@ class UserController extends Controller
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
-            'created_at' => $user->created_at
+            'created_at' => $user->created_at,
+            'updated_at' => $user->updated_at
         ]);
     }
 
@@ -87,7 +112,8 @@ class UserController extends Controller
         return response()->json([
             'id' => $updatedUser->id,
             'name' => $updatedUser->name,
-            'email' => $updatedUser->email
+            'email' => $updatedUser->email,
+            'updated_at' => $updatedUser->updated_at
         ]);
     }
 

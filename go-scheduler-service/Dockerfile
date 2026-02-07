@@ -1,6 +1,5 @@
-FROM golang:1.21-alpine AS builder
+FROM golang:1.21-alpine
 
-# Set working directory
 WORKDIR /app
 
 # Copy go mod files
@@ -15,19 +14,14 @@ COPY . .
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -o main .
 
-# Final stage
-FROM alpine:latest
-
-# Install ca-certificates for HTTPS requests
+# Install ca-certificates
 RUN apk --no-cache add ca-certificates
 
-WORKDIR /root/
+# Create state.json from example if not exists
+RUN cp state.json.example state.json 2>/dev/null || true
 
-# Copy the binary from builder stage
-COPY --from=builder /app/main .
-
-# Expose port (though this is a scheduler, so may not expose anything)
-EXPOSE 8080
+# Create users directory
+RUN mkdir -p users && chmod 777 users
 
 # Run the application
 CMD ["./main"]

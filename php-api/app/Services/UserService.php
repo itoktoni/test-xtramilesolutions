@@ -22,6 +22,22 @@ class UserService
     }
 
     /**
+     * Get users since a given ID (for new data).
+     */
+    public function getUsersSinceId(int $sinceId, int $limit = 100): \Illuminate\Database\Eloquent\Collection
+    {
+        return $this->repository->getUsersSinceId($sinceId, $limit);
+    }
+
+    /**
+     * Get users for update scanning.
+     */
+    public function getUsersForScan(int $scanId, int $lastCreatedId, int $limit = 100): \Illuminate\Database\Eloquent\Collection
+    {
+        return $this->repository->getUsersForScan($scanId, $lastCreatedId, $limit);
+    }
+
+    /**
      * Find user by ID.
      */
     public function findUser(int $id): ?\App\Models\User

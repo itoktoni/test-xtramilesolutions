@@ -13,102 +13,204 @@ import (
 )
 
 type User struct {
-	ID    int    `json:"id"`
-	Name  string `json:"name"`
-	Email string `json:"email"`
+	ID        int    `json:"id"`
+	Name      string `json:"name"`
+	Email     string `json:"email"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
 }
 
-type UserData struct {
-	Name  string `json:"name"`
-	Email string `json:"email"`
+type SyncState struct {
+	LastCreatedID         int `json:"last_created_id"`
+	LastProcessedUpdateID int `json:"last_processed_update_id"`
 }
 
-const dataFilePath = "scheduler_data.json"
+type Config struct {
+	PHPAPIURL    string
+	PythonAPIURL string
+	StateFile    string
+	UsersDir     string
+	SleepSeconds int
+	MaxUserID    int
+}
+
+const defaultSleepSeconds = 30
+const defaultMaxUserID = 100
 
 func main() {
-	phpAPIBaseURL := os.Getenv("PHP_API_URL")
-	if phpAPIBaseURL == "" {
-		phpAPIBaseURL = "http://php-api:80"
-	}
+	cfg := loadConfig()
 
-	pythonAPIBaseURL := os.Getenv("PYTHON_API_URL")
-	if pythonAPIBaseURL == "" {
-		pythonAPIBaseURL = "http://python-service:5000"
+	// Create users directory
+	usersPath := cfg.UsersDir
+	if err := os.MkdirAll(usersPath, 0755); err != nil {
+		log.Fatalf("Failed to create users directory: %v", err)
+	}
+	log.Printf("Users directory: %s", usersPath)
+	log.Printf("Max user ID to scan: %d", cfg.MaxUserID)
+
+	// Create state.json if not exists
+	if _, err := os.Stat(cfg.StateFile); os.IsNotExist(err) {
+		log.Printf("State file not found, creating new state...")
+		state := &SyncState{
+			LastCreatedID:         0,
+			LastProcessedUpdateID: 0,
+		}
+		saveState(cfg.StateFile, state)
 	}
 
 	log.Println("Starting Go scheduler service...")
-	log.Printf("PHP API URL: %s", phpAPIBaseURL)
-	log.Printf("Python API URL: %s", pythonAPIBaseURL)
+	log.Printf("PHP API URL: %s", cfg.PHPAPIURL)
+	log.Printf("Python API URL: %s", cfg.PythonAPIURL)
 
+	syncState := loadState(cfg.StateFile)
+	log.Printf("Initial state: last_created_id=%d, last_processed_update_id=%d",
+		syncState.LastCreatedID, syncState.LastProcessedUpdateID)
+
+	// Main sync loop
 	for {
-		// Fetch user from PHP API
-		user, err := fetchUserFromAPI(phpAPIBaseURL)
-		if err != nil {
-			log.Printf("Error fetching user from API: %v", err)
-		} else if user != nil {
-			// Store user data in file
-			err = storeUserData(user)
-			if err != nil {
-				log.Printf("Error storing user data: %v", err)
-			} else {
-				log.Printf("Stored user: %s (%s)", user.Name, user.Email)
+		// Fetch all users from PHP API (one request)
+		usersProcessed := processAllUsers(cfg, syncState)
 
-				// Check if name starts with "David" and send to Python service
-				if strings.HasPrefix(strings.ToLower(user.Name), "david") {
-					err = sendToPythonService(*user, pythonAPIBaseURL)
-					if err != nil {
-						log.Printf("Error sending to Python service: %v", err)
-					} else {
-						log.Printf("Sent user %s to Python service", user.Name)
-					}
-				}
-			}
+		if usersProcessed {
+			log.Printf("Completed processing new users, sleeping for %d seconds...", cfg.SleepSeconds)
+			time.Sleep(time.Duration(cfg.SleepSeconds) * time.Second)
+		} else {
+			// Error occurred, retry sooner
+			log.Printf("Error occurred, retrying in 5 seconds...")
+			time.Sleep(5 * time.Second)
 		}
-
-		// Wait for 30 seconds before next iteration
-		time.Sleep(30 * time.Second)
 	}
 }
 
-func fetchUserFromAPI(baseURL string) (*User, error) {
-	// Create a sample user to send to PHP API
-	sampleUsers := []UserData{
-		{Name: "David Smith", Email: "david@example.com"},
-		{Name: "Jane Doe", Email: "jane@example.com"},
-		{Name: "David Johnson", Email: "david.johnson@example.com"},
-		{Name: "John Smith", Email: "john@example.com"},
+// processAllUsers fetches all users from PHP API and processes only new ones
+func processAllUsers(cfg Config, state *SyncState) bool {
+	log.Printf("Fetching all users from PHP API: %s/users", cfg.PHPAPIURL)
+
+	// Fetch all users in one request
+	allUsers, err := fetchAllUsers(cfg.PHPAPIURL + "/users")
+	if err != nil {
+		log.Printf("Error fetching all users: %v", err)
+		return false
 	}
 
-	// For demo purposes, we'll cycle through sample users
-	// In a real scenario, this would come from some external source
-
-	client := &http.Client{Timeout: 10 * time.Second}
-
-	// Select a user randomly or in rotation
-	selectedUser := sampleUsers[int(time.Now().Unix())%len(sampleUsers)]
-
-	jsonData, err := json.Marshal(selectedUser)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal user data: %w", err)
+	// Skip if nil response (non-JSON response)
+	if allUsers == nil {
+		return true
 	}
 
-	resp, err := client.Post(baseURL+"/users", "application/json", bytes.NewBuffer(jsonData))
+	if len(allUsers) == 0 {
+		log.Printf("No users found in PHP API")
+		return true
+	}
+
+	// Filter to only new users (ID > last_created_id)
+	var newUsers []User
+	for _, user := range allUsers {
+		if user.ID > state.LastCreatedID {
+			newUsers = append(newUsers, user)
+		}
+	}
+
+	if len(newUsers) == 0 {
+		log.Printf("No new users found (all users have ID <= %d)", state.LastCreatedID)
+		return true
+	}
+
+	log.Printf("Found %d new users (ID > %d), processing each one...", len(newUsers), state.LastCreatedID)
+
+	// Foreach: Process each new user
+	for _, user := range newUsers {
+		log.Printf("Processing user: %s (ID: %d, Email: %s)", user.Name, user.ID, user.Email)
+
+		// Store user data to users folder
+		err = storeUserData(&user, cfg.UsersDir)
+		if err != nil {
+			log.Printf("Error storing user %d: %v", user.ID, err)
+			continue
+		}
+
+		log.Printf("Logged user %d to %s/user_%d.json", user.ID, cfg.UsersDir, user.ID)
+
+		// Check if name contains "David" (case-insensitive)
+		if strings.Contains(strings.ToLower(user.Name), "david") {
+			log.Printf("User name contains 'David', sending to Python Flask API...")
+			err = sendToPythonService(&user, cfg.PythonAPIURL)
+			if err != nil {
+				log.Printf("ERROR: Failed to send user %d to Python: %v", user.ID, err)
+			} else {
+				log.Printf("SUCCESS: Sent user '%s' (ID: %d, Email: %s) to Python Flask API",
+					user.Name, user.ID, user.Email)
+			}
+		}
+
+		// Update state with new last_created_id
+		state.LastCreatedID = user.ID
+		saveState(cfg.StateFile, state)
+	}
+
+	log.Printf("Completed processing %d new users", len(newUsers))
+	return true
+}
+
+// fetchAllUsers fetches all users from the PHP API
+func fetchAllUsers(url string) ([]User, error) {
+	client := &http.Client{Timeout: 30 * time.Second}
+
+	resp, err := client.Get(url)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request to PHP API: %w", err)
+		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusOK {
+		// Skip non-JSON responses silently
+		return nil, nil
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, nil // Skip on read error
+	}
+
+	// Check if response is JSON array
+	if len(body) == 0 || body[0] != '[' {
+		return nil, nil // Skip non-JSON responses
+	}
+
+	var users []User
+	err = json.Unmarshal(body, &users)
+	if err != nil {
+		return nil, nil // Skip on unmarshal error
+	}
+
+	return users, nil
+}
+
+// fetchSingleUser fetches a single user from the PHP API
+func fetchSingleUser(url string) (*User, error) {
+	client := &http.Client{Timeout: 30 * time.Second}
+
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		return nil, fmt.Errorf("user not found")
+	}
+
+	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("unexpected status code %d: %s", resp.StatusCode, string(body))
 	}
 
-	var user User
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
+		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
+	var user User
 	err = json.Unmarshal(body, &user)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
@@ -117,39 +219,101 @@ func fetchUserFromAPI(baseURL string) (*User, error) {
 	return &user, nil
 }
 
-func storeUserData(user *User) error {
-	file, err := os.OpenFile(dataFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to open data file: %w", err)
+func loadConfig() Config {
+	maxID := getEnvInt("MAX_USER_ID", defaultMaxUserID)
+	return Config{
+		PHPAPIURL:    getEnv("PHP_API_URL", "http://php-api:8080"),
+		PythonAPIURL: getEnv("PYTHON_API_URL", "http://python-service:5000"),
+		StateFile:    "state.json",
+		UsersDir:     "users",
+		SleepSeconds: getEnvInt("SLEEP_SECONDS", defaultSleepSeconds),
+		MaxUserID:    maxID,
 	}
-	defer file.Close()
+}
 
-	// Create a new line with the user data as JSON
-	jsonData, err := json.Marshal(user)
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
+func getEnvInt(key string, defaultValue int) int {
+	if value := os.Getenv(key); value != "" {
+		var result int
+		fmt.Sscanf(value, "%d", &result)
+		if result > 0 {
+			return result
+		}
+	}
+	return defaultValue
+}
+
+func loadState(filename string) *SyncState {
+	data, err := os.ReadFile(filename)
 	if err != nil {
-		return fmt.Errorf("failed to marshal user data: %w", err)
+		if os.IsNotExist(err) {
+			state := &SyncState{
+				LastCreatedID:         0,
+				LastProcessedUpdateID: 0,
+			}
+			saveState(filename, state)
+			return state
+		}
+		log.Printf("Warning: Could not read state file: %v", err)
+		return &SyncState{}
 	}
 
-	// Write JSON object to file followed by a newline
-	_, err = file.WriteString(string(jsonData) + "\n")
+	var state SyncState
+	if err := json.Unmarshal(data, &state); err != nil {
+		log.Printf("Warning: Could not parse state file: %v", err)
+		return &SyncState{}
+	}
+
+	return &state
+}
+
+func saveState(filename string, state *SyncState) {
+	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to write user data to file: %w", err)
+		log.Printf("Error marshaling state: %v", err)
+		return
+	}
+
+	if err := os.WriteFile(filename, data, 0644); err != nil {
+		log.Printf("Error saving state: %v", err)
+	}
+}
+
+func storeUserData(user *User, usersDir string) error {
+	filename := fmt.Sprintf("%s/user_%d.json", usersDir, user.ID)
+	data, err := json.MarshalIndent(user, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal user: %w", err)
+	}
+
+	err = os.WriteFile(filename, data, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write file: %w", err)
 	}
 
 	return nil
 }
 
-func sendToPythonService(user User, baseURL string) error {
+func sendToPythonService(user *User, baseURL string) error {
 	client := &http.Client{Timeout: 10 * time.Second}
 
 	jsonData, err := json.Marshal(user)
 	if err != nil {
-		return fmt.Errorf("failed to marshal user data: %w", err)
+		return fmt.Errorf("failed to marshal user: %w", err)
 	}
+
+	log.Printf("Sending to Python Flask API: %s/receive_user", baseURL)
+	log.Printf("Payload: %s", string(jsonData))
 
 	resp, err := client.Post(baseURL+"/receive_user", "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		return fmt.Errorf("failed to send request to Python service: %w", err)
+		return fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -157,6 +321,9 @@ func sendToPythonService(user User, baseURL string) error {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("unexpected status code %d: %s", resp.StatusCode, string(body))
 	}
+
+	responseBody, _ := io.ReadAll(resp.Body)
+	log.Printf("Python Flask API response: %s", string(responseBody))
 
 	return nil
 }

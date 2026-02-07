@@ -11,7 +11,32 @@ class EloquentUserRepository implements UserRepositoryInterface
      */
     public function getAll(): \Illuminate\Database\Eloquent\Collection
     {
-        return User::orderBy('created_at', 'desc')->get();
+        return User::orderBy('id', 'desc')->get();
+    }
+
+    /**
+     * Get users since a given ID (for new data).
+     * Query: SELECT * FROM users WHERE id > :since_id ORDER BY id ASC LIMIT :limit
+     */
+    public function getUsersSinceId(int $sinceId, int $limit = 100): \Illuminate\Database\Eloquent\Collection
+    {
+        return User::where('id', '>', $sinceId)
+            ->orderBy('id', 'asc')
+            ->limit($limit)
+            ->get();
+    }
+
+    /**
+     * Get users for update scanning.
+     * Query: SELECT * FROM users WHERE id > :scan_id AND id <= :last_created_id ORDER BY id ASC LIMIT :limit
+     */
+    public function getUsersForScan(int $scanId, int $lastCreatedId, int $limit = 100): \Illuminate\Database\Eloquent\Collection
+    {
+        return User::where('id', '>', $scanId)
+            ->where('id', '<=', $lastCreatedId)
+            ->orderBy('id', 'asc')
+            ->limit($limit)
+            ->get();
     }
 
     /**
