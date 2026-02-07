@@ -224,7 +224,7 @@ func loadConfig() Config {
 	return Config{
 		PHPAPIURL:    getEnv("PHP_API_URL", "http://php-api:8080"),
 		PythonAPIURL: getEnv("PYTHON_API_URL", "http://python-service:5000"),
-		StateFile:    "state.json",
+		StateFile:    "data/state.json",
 		UsersDir:     "users",
 		SleepSeconds: getEnvInt("SLEEP_SECONDS", defaultSleepSeconds),
 		MaxUserID:    maxID,

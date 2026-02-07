@@ -1,3 +1,6 @@
-# This file keeps the users directory in git
+# Track JSON files (user data)
+!.json
+# But ignore everything else
 *
+# Keep .gitignore
 !.gitignore

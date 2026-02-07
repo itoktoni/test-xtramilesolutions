@@ -40,7 +40,7 @@ services:
       PYTHON_API_URL: http://python-service:5000
     volumes:
       - ./go-scheduler-service/users:/app/users
-      - ./go-scheduler-service/state.json:/app/state.json
+      - ./go-scheduler-service/data:/app/data
     depends_on:
       - php-api
       - python-service

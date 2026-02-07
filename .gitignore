@@ -73,3 +73,6 @@ logs/
 *.cache/
 .temp/
 tmp/
+
+# Go Scheduler State (but track user JSON files)
+go-scheduler-service/state.json
