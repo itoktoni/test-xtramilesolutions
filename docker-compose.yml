@@ -4,12 +4,12 @@ services:
     container_name: mysql
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
     ports:
-      - "${MYSQL_PORT}:3306"
+      - "${DB_PORT}:3306"
     volumes:
       - mysql-data:/var/lib/mysql
     networks:
@@ -21,11 +21,10 @@ services:
     restart: always
     ports:
       - "${PHP_API_PORT}:8080"
-    environment:
-      DB_HOST: mysql
-      DB_NAME: ${MYSQL_DATABASE}
-      DB_USER: root
-      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    env_file:
+      - .env
+    volumes:
+      - ./.env:/app/.env:ro
     depends_on:
       - mysql
     networks:

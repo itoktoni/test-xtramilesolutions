@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
+use PSpell\Config;
 
 /*
 |--------------------------------------------------------------------------
@@ -22,8 +23,3 @@ Route::post('/users', [UserController::class, 'store']);
 Route::get('/users/{id}', [UserController::class, 'show']);
 Route::put('/users/{id}', [UserController::class, 'update']);
 Route::delete('/users/{id}', [UserController::class, 'destroy']);
-
-Route::post('/user', [UserController::class, 'store']);
-Route::post('/test', function () {
-    return response()->json(['message' => 'Test endpoint reached']);
-});
