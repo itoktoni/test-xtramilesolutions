@@ -1,11 +1,13 @@
-FROM php:8.1-cli
+FROM php:8.2-cli
 
 WORKDIR /app
 
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     libzip-dev \
     unzip \
     wget \
+    git \
     && docker-php-ext-install pdo pdo_mysql
 
 # Install Composer
@@ -13,14 +15,27 @@ RUN wget https://getcomposer.org/download/latest-stable/composer.phar -O compose
     && chmod +x composer \
     && mv composer /usr/local/bin/composer
 
-COPY composer.json ./
-RUN composer install --optimize-autoloader --no-scripts
+# Copy composer files first for better layer caching
+COPY composer.json composer.lock ./
 
+# Install dependencies
+RUN composer install --optimize-autoloader --prefer-dist || true
+
+# Copy application files
 COPY . .
 
+# Create storage directories
+RUN mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
+RUN chmod -R 777 storage bootstrap/cache
+
+# Expose port
 EXPOSE 8080
 
-# Run tests
-RUN chmod +x vendor/bin/phpunit
+# Set permissions for artisan
+RUN chmod +x artisan
 
-CMD ["php", "-S", "0.0.0.0:8080", "-t", "public"]
+# Generate autoloader
+RUN composer dump-autoload --optimize || true
+
+# Run Laravel server
+CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8080"]
